@@ -1,0 +1,72 @@
+package com.awais.todo_mangement.service.impl;
+
+import com.awais.todo_mangement.dto.LoginDto;
+import com.awais.todo_mangement.dto.RegisterDto;
+import com.awais.todo_mangement.entity.Role;
+import com.awais.todo_mangement.entity.User;
+import com.awais.todo_mangement.exceptions.TodoAPIException;
+import com.awais.todo_mangement.repository.RoleRepository;
+import com.awais.todo_mangement.repository.UserRepository;
+import com.awais.todo_mangement.security.JwtTokenProvider;
+import com.awais.todo_mangement.service.AuthService;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import org.modelmapper.internal.bytebuddy.implementation.bytecode.Throw;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+
+import java.util.HashSet;
+import java.util.Set;
+
+@Service
+@Data
+@AllArgsConstructor
+public class AuthServiceImpl implements AuthService {
+    @Autowired
+    private UserRepository userRepository;
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+    @Autowired
+    private RoleRepository roleRepository;
+    @Autowired
+    private AuthenticationManager authenticationManager;
+    @Autowired
+    private JwtTokenProvider jwtTokenProvider;
+    @Override
+    public String register(RegisterDto registerDto) {
+        if(userRepository.existsByUsername(registerDto.getUsername())) {
+            throw new TodoAPIException(HttpStatus.BAD_REQUEST,"Username is already in use");
+        }
+        if(userRepository.existsByEmail(registerDto.getEmail())) {
+            throw new TodoAPIException(HttpStatus.BAD_REQUEST,"Email is already in use");
+        }
+        User user = new User();
+        user.setName(registerDto.getName());
+        user.setUsername(registerDto.getUsername());
+        user.setEmail(registerDto.getEmail());
+        user.setPassword(passwordEncoder.encode(registerDto.getPassword()));
+        Set<Role> roles = new HashSet<>();
+        Role userRole = roleRepository.findByName("ROLE_USER");
+        roles.add(userRole);
+        user.setRoles(roles);
+        userRepository.save(user);
+        return "User Register Successfully";
+    }
+
+    @Override
+    public String login(LoginDto loginDto) {
+        Authentication authentication = authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(
+           loginDto.getUsernameOrEmail(),
+           loginDto.getPassword()
+        ));
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+        String token =  jwtTokenProvider.generateToken(authentication);
+        return token;
+    }
+}
